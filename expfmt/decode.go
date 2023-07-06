@@ -21,8 +21,8 @@ import (
 	"net/http"
 
 	dto "github.com/prometheus/client_model/go"
+	"google.golang.org/protobuf/encoding/protodelim"
 
-	"github.com/matttproud/golang_protobuf_extensions/pbutil"
 	"github.com/prometheus/common/model"
 )
 
@@ -70,23 +70,43 @@ func ResponseFormat(h http.Header) Format {
 }
 
 // NewDecoder returns a new decoder based on the given input format.
+//
 // If the input format does not imply otherwise, a text format decoder is returned.
+//
+// For FmtProtoDelim it is recommended to supply an efficient io.ByteReader such as
+// via bufio.NewReader, or reading the varint delimiter will Read one byte at a time.
 func NewDecoder(r io.Reader, format Format) Decoder {
 	switch format {
 	case FmtProtoDelim:
-		return &protoDecoder{r: r}
+		rd, ok := r.(protodelim.Reader)
+		if !ok {
+			rd = protoByteReader{r}
+		}
+		return &protoDecoder{r: rd}
 	}
 	return &textDecoder{r: r}
 }
 
 // protoDecoder implements the Decoder interface for protocol buffers.
 type protoDecoder struct {
-	r io.Reader
+	r protodelim.Reader
+}
+
+// protoByteReader implements io.ByteReader over an io.Reader without buffering.
+type protoByteReader struct {
+	io.Reader
+}
+
+// ReadByte reads a single byte from the underlying Reader.
+func (r protoByteReader) ReadByte() (byte, error) {
+	var buf [1]byte
+	_, err := r.Read(buf[:])
+	return buf[0], err
 }
 
 // Decode implements the Decoder interface.
 func (d *protoDecoder) Decode(v *dto.MetricFamily) error {
-	_, err := pbutil.ReadDelimited(d.r, v)
+	err := protodelim.UnmarshalFrom(d.r, v)
 	if err != nil {
 		return err
 	}

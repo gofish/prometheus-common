@@ -14,13 +14,14 @@
 package expfmt
 
 import (
+	"bufio"
 	"bytes"
 	"compress/gzip"
 	"io"
 	"os"
 	"testing"
 
-	"github.com/matttproud/golang_protobuf_extensions/pbutil"
+	"google.golang.org/protobuf/encoding/protodelim"
 
 	dto "github.com/prometheus/client_model/go"
 )
@@ -100,7 +101,7 @@ func BenchmarkParseProto(b *testing.B) {
 		in := bytes.NewReader(data)
 		for {
 			family.Reset()
-			if _, err := pbutil.ReadDelimited(in, family); err != nil {
+			if err := protodelim.UnmarshalFrom(in, family); err != nil {
 				if err == io.EOF {
 					break
 				}
@@ -126,9 +127,10 @@ func BenchmarkParseProtoGzip(b *testing.B) {
 		if err != nil {
 			b.Fatal(err)
 		}
+		rd := bufio.NewReader(in)
 		for {
 			family.Reset()
-			if _, err := pbutil.ReadDelimited(in, family); err != nil {
+			if err := protodelim.UnmarshalFrom(rd, family); err != nil {
 				if err == io.EOF {
 					break
 				}
@@ -155,7 +157,7 @@ func BenchmarkParseProtoMap(b *testing.B) {
 		in := bytes.NewReader(data)
 		for {
 			family := &dto.MetricFamily{}
-			if _, err := pbutil.ReadDelimited(in, family); err != nil {
+			if err := protodelim.UnmarshalFrom(in, family); err != nil {
 				if err == io.EOF {
 					break
 				}
